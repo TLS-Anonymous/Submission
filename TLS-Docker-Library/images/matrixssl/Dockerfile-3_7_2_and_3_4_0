@@ -1,0 +1,26 @@
+FROM alpine-build:3.12 as matrixssl-base1
+ARG VERSION
+RUN git clone --depth=1 --branch=v3.${VERSION} https://github.com/jurajsomorovsky/matrixssl.git
+WORKDIR matrixssl
+RUN make
+WORKDIR apps/
+RUN make
+
+FROM entrypoint as matrixssl-base2
+COPY --from=matrixssl-base1 /lib/ld-musl-x86_64.so.* /lib/
+
+FROM matrixssl-base2 as matrixssl-server
+ARG VERSION
+LABEL "tls_implementation"="matrixssl"
+LABEL "tls_implementation_version"="3.${VERSION}"
+LABEL "tls_implementation_connectionRole"="server"
+COPY --from=matrixssl-base1 /src/matrixssl/apps/server /bin/
+ENTRYPOINT ["server-entrypoint", "server"]
+
+FROM matrixssl-base2 as matrixssl-client
+ARG VERSION
+LABEL "tls_implementation"="matrixssl"
+LABEL "tls_implementation_version"="3.${VERSION}"
+LABEL "tls_implementation_connectionRole"="client"
+COPY --from=matrixssl-base1 /src/matrixssl/apps/client /bin/
+ENTRYPOINT ["client-entrypoint", "client"]
